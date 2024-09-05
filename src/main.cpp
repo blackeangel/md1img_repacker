@@ -17,9 +17,13 @@ int main(int argc, char* argv[]) {
             std::filesystem::path input_file_path(input_path);
             output_dir = input_file_path.parent_path() / input_file_path.stem();
         }
-
-        auto file_mapping = read_file_mapping(input_path);
-        process_file(input_path, output_dir.string(), file_mapping);
+        // Ищем файл маппинга
+        std::streampos map_offset = find_file_map_offset(input_path);
+        if (map_offset != -1) {
+            auto file_mapping = read_file_mapping(input_path, map_offset);
+            process_file(input_path, output_dir.string(), file_mapping);
+            //unpack(input_path, output_dir.string());
+        }
     } else if (mode == "pack") {
         std::filesystem::path input_dir_path(input_path);
 

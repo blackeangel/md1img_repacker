@@ -15,6 +15,10 @@
 const uint32_t MD1IMG_MAGIC1 = 0x58881688;
 const uint32_t MD1IMG_MAGIC2 = 0x58891689;
 
+const std::string FILE_MAP_MARKER = "md1_file_map";
+const std::vector<uint8_t> FILE_MAP_SIGNATURE = {0x6D, 0x64, 0x31, 0x5F, 0x66, 0x69, 0x6C, 0x65, 0x5F, 0x6D, 0x61, 0x70};
+
+
 #pragma pack(push, 1)
 struct Header {
     uint32_t magic1;
@@ -38,5 +42,7 @@ struct Header {
 #include <cstdint>
 
 void write_packed_file(const std::string& input_dir, const std::string& output_file_path);
-std::unordered_map<std::string, std::string> read_file_mapping(const std::string& path);
+std::unordered_map<std::string, std::string> read_file_mapping(const std::string& path, std::streampos map_offset);
+std::streampos find_file_map_offset(const std::string& path);
 void process_file(const std::string& input_path, const std::string& output_dir, const std::unordered_map<std::string, std::string>& file_mapping);
+void unpack(const std::string& input_path, const std::string& output_dir);
