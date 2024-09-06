@@ -62,7 +62,13 @@ std::unordered_map<std::string, std::string> read_file_mapping(const std::string
     return mapping;
 }
 
-/*void process_file(const std::string &input_path, const std::string &output_dir, const std::unordered_map<std::string, std::string> &file_mapping) {
+void process_file(const std::string &input_path, const std::string &output_dir) {
+    // Ищем файл маппинга
+    std::unordered_map<std::basic_string<char>, std::basic_string<char>> file_mapping;
+    std::streampos map_offset = find_file_map_offset(input_path);
+    if (map_offset != -1) {
+       file_mapping = read_file_mapping(input_path, map_offset);
+    }
     std::filesystem::path input_file_path(input_path);
     std::error_code ec;
     auto file_size = std::filesystem::file_size(input_file_path, ec);
@@ -80,63 +86,7 @@ std::unordered_map<std::string, std::string> read_file_mapping(const std::string
     size_t offset = 0;
     std::filesystem::create_directories(output_dir); // Создаем выходную папку, если она не существует
 
-    while (offset < file_size) {
-        input_file.seekg(offset, std::ios::beg);
-        Header header;
-        input_file.read(reinterpret_cast<char *>(&header), sizeof(Header));
-
-        if (header.magic1 != MD1IMG_MAGIC1 || header.magic2 != MD1IMG_MAGIC2) {
-            break;
-        }
-
-        std::string name(header.name, strnlen(header.name, sizeof(header.name)));
-        std::cout << "Found " << name << "@0x" << std::hex << header.base << ",0x" << header.data_size << std::dec << std::endl;
-
-        std::string output_name = output_dir + "/" + name + ".bin";
-        if (file_mapping.find(name) != file_mapping.end()) {
-            output_name = output_dir + "/" + file_mapping.at(name);
-        }
-
-        offset += header.data_offset;
-        input_file.seekg(offset, std::ios::beg);
-
-        std::vector<char> data(header.data_size);
-        input_file.read(data.data(), header.data_size);
-
-        std::ofstream output_file(output_name, std::ios::binary);
-        if (!output_file) {
-            std::cerr << "Error opening output file for writing: " << output_name << std::endl;
-            return;
-        }
-        output_file.write(data.data(), header.data_size);
-        std::cout << name << " written to " << output_name << std::endl;
-
-        offset += header.data_size;
-        if (offset % 16 != 0) {
-            offset += 16 - (offset % 16);
-        }
-    }
-}
-*/
-void process_file(const std::string &input_path, const std::string &output_dir, const std::unordered_map<std::string, std::string> &file_mapping) {
-    std::filesystem::path input_file_path(input_path);
-    std::error_code ec;
-    auto file_size = std::filesystem::file_size(input_file_path, ec);
-    if (ec) {
-        std::cerr << "Error getting file size: " << ec.message() << std::endl;
-        return;
-    }
-
-    std::ifstream input_file(input_path, std::ios::binary);
-    if (!input_file) {
-        std::cerr << "Error opening file: " << input_path << std::endl;
-        return;
-    }
-
-    size_t offset = 0;
-    std::filesystem::create_directories(output_dir); // Создаем выходную папку, если она не существует
-
-    int file_counter = 0;  // Добавляем переменную для отслеживания порядка файлов
+    int file_counter = 1;  // Добавляем переменную для отслеживания порядка файлов
 
     while (offset < file_size) {
         input_file.seekg(offset, std::ios::beg);
@@ -151,10 +101,11 @@ void process_file(const std::string &input_path, const std::string &output_dir, 
         std::cout << "Found " << name << "@0x" << std::hex << header.base << ",0x" << header.data_size << std::dec << std::endl;
 
         // Добавляем порядковый номер к имени файла
-        std::string output_name = output_dir + "/" + std::to_string(file_counter++) + "_" + name + ".bin";
-
+        std::string output_name;
         if (file_mapping.find(name) != file_mapping.end()) {
-            output_name = output_dir + "/" + std::to_string(file_counter++) + "_" + file_mapping.at(name);
+            output_name = output_dir + "/" + std::to_string(file_counter) + "_" + file_mapping.at(name);
+        }else{
+            output_name = output_dir + "/" + std::to_string(file_counter) + "_" + name;
         }
 
         offset += header.data_offset;
@@ -175,5 +126,6 @@ void process_file(const std::string &input_path, const std::string &output_dir, 
         if (offset % 16 != 0) {
             offset += 16 - (offset % 16);
         }
+        file_counter += 1;
     }
 }
