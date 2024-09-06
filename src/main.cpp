@@ -17,9 +17,7 @@ int main(int argc, char* argv[]) {
             std::filesystem::path input_file_path(input_path);
             output_dir = input_file_path.parent_path() / input_file_path.stem();
         }
-
             process_file(input_path, output_dir.string());
-            //unpack(input_path, output_dir.string());
         }
     else if (mode == "pack") {
         std::filesystem::path input_dir_path(input_path);
@@ -33,7 +31,6 @@ int main(int argc, char* argv[]) {
         std::filesystem::path output_file_path = input_dir_path.parent_path() / (input_dir_path.stem().string() + "-new.img");
 
         // Пакуем файлы в новый образ
-        //write_packed_file(input_path, output_file_path.string());
         pack_files(input_path, output_file_path.string());
     } else {
         std::cerr << "Invalid mode: " << mode << ". Use 'pack' or 'unpack'." << std::endl;

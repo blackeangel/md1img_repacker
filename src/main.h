@@ -1,7 +1,3 @@
-#ifndef MD1IMG_REPACKER_MAIN_H
-#define MD1IMG_REPACKER_MAIN_H
-
-#endif //MD1IMG_REPACKER_MAIN_H
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -30,10 +26,14 @@ struct Header {
     uint32_t mode;           // 4 bytes
     uint32_t magic2;         // 4 bytes
     uint32_t data_offset;    // 4 bytes
-    uint32_t reserved[6];    // 24 bytes
-    uint8_t reserved2[432];  // 432 bytes, заполненные значением 0xFF
+    uint32_t hdr_version;    // 4 bytes
+    uint32_t img_type;       // 4 bytes
+    uint32_t img_list_end;   // 4 bytes
+    uint32_t align_size;     // 4 bytes
+    uint32_t dsize_extend;   // 4 bytes
+    uint32_t maddr_extend;   // 4 bytes
+    uint8_t reserved[432];  // 432 bytes, заполненные значением 0xFF
 };
-#pragma pack(pop)
 
 #include <iostream>
 #include <fstream>
@@ -45,9 +45,7 @@ struct Header {
 #include <cstring>
 #include <cstdint>
 
-void write_packed_file(const std::string& input_dir, const std::string& output_file_path);
-std::unordered_map<std::string, std::string> read_file_mapping(const std::string& path, std::streampos map_offset);
-std::streampos find_file_map_offset(const std::string& path);
+// Основная функция для распаковки файлов
 void process_file(const std::string& input_path, const std::string& output_dir);
-void unpack(const std::string& input_path, const std::string& output_dir);
+// Основная функция для упаковки файлов
 void pack_files(const std::string &input_dir, const std::string &output_file);

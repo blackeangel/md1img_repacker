@@ -1,66 +1,4 @@
 #include "main.h"
-/*
-void write_packed_file(const std::string& input_dir, const std::string& output_file_path) {
-    std::ofstream output_file(output_file_path, std::ios::binary);
-    if (!output_file) {
-        std::cerr << "Error creating output file: " << output_file_path << std::endl;
-        return;
-    }
-
-    uint32_t offset = 0;
-    std::vector<std::filesystem::path> files;
-
-    // Собираем все бинарные файлы из папки
-    for (const auto& entry : std::filesystem::directory_iterator(input_dir)) {
-        if (entry.is_regular_file()) {
-            files.push_back(entry.path());
-        }
-    }
-
-    for (const auto& file_path : files) {
-        std::ifstream input_file(file_path, std::ios::binary | std::ios::ate);
-        if (!input_file) {
-            std::cerr << "Error opening input file: " << file_path << std::endl;
-            continue;
-        }
-
-        // Получаем размер данных
-        std::streamsize data_size = input_file.tellg();
-        input_file.seekg(0, std::ios::beg);
-
-        // Читаем данные файла
-        std::vector<char> data(data_size);
-        input_file.read(data.data(), data_size);
-
-        // Формируем имя файла без пути
-        std::string file_name = file_path.stem().string();
-
-        // Создаем заголовок
-        Header header = {};
-        header.magic1 = MD1IMG_MAGIC1;
-        header.data_size = static_cast<uint32_t>(data_size);
-        std::strncpy(header.name, file_name.c_str(), sizeof(header.name) - 1);
-        header.base = 0; // Значение можно поменять, если известно
-        header.mode = 0; // Тоже можно изменить при необходимости
-        header.magic2 = MD1IMG_MAGIC2;
-        header.data_offset = offset + sizeof(Header);
-
-        // Записываем заголовок и данные в выходной файл
-        output_file.write(reinterpret_cast<const char*>(&header), sizeof(Header));
-        output_file.write(data.data(), data_size);
-
-        std::cout << "Packed " << file_name << " into " << output_file_path << std::endl;
-
-        // Обновляем offset (выравнивание на 16 байт)
-        offset = header.data_offset + data_size;
-        if (offset % 16 != 0) {
-            offset += 16 - (offset % 16);
-        }
-    }
-
-    std::cout << "Packing completed: " << output_file_path << std::endl;
-}
-*/
 
 // Функция для извлечения числового префикса из имени файла
 int extract_number(const std::string &filename) {
@@ -101,8 +39,10 @@ std::unordered_map<std::string, std::string> read_file_mapping(const std::string
     while (std::getline(map_file, line)) {
         auto delimiter_pos = line.find('=');
         if (delimiter_pos != std::string::npos) {
-            std::string key = line.substr(0, delimiter_pos);
-            std::string value = line.substr(delimiter_pos + 1);
+            //std::string key = line.substr(0, delimiter_pos);
+            //std::string value = line.substr(delimiter_pos + 1);
+            std::string value = line.substr(0, delimiter_pos);
+            std::string key = line.substr(delimiter_pos + 1);
             mapping[key] = value;
         }
     }
@@ -120,8 +60,8 @@ void initialize_header(Header &header, const std::string &name, uint32_t data_si
     header.magic2 = MD1IMG_MAGIC2;
     header.data_offset = sizeof(Header);
 
-    std::memset(header.reserved, 0, sizeof(header.reserved));
-    std::memset(header.reserved2, 0xFF, sizeof(header.reserved2));
+    //std::memset(header.reserved, 0, sizeof(header.reserved));
+    std::memset(header.reserved, 0xFF, sizeof(header.reserved));
 }
 
 // Компаратор для сортировки файлов
@@ -131,20 +71,65 @@ bool file_sort_comparator(const std::filesystem::path &file1, const std::filesys
     return base1 < base2;
 }
 
-// Основная функция для упаковки файлов
+// Функция для инициализации заголовка из файла meta_info
+void initialize_header_from_file(Header &header, const std::unordered_map<std::string, std::string> &meta_data) {
+    header.magic1 = std::stoul(meta_data.at("magic1"), nullptr, 16);
+    header.data_size = std::stoul(meta_data.at("data_size"));
+    std::strncpy(header.name, meta_data.at("name").c_str(), sizeof(header.name));
+    header.base = std::stoul(meta_data.at("base"), nullptr, 16);
+    header.mode = std::stoul(meta_data.at("mode"), nullptr, 16);
+    header.magic2 = std::stoul(meta_data.at("magic2"), nullptr, 16);
+    header.data_offset = std::stoul(meta_data.at("data_offset"), nullptr, 16);
+    header.hdr_version = std::stoul(meta_data.at("hdr_version"), nullptr, 16);
+    header.img_type = std::stoul(meta_data.at("img_type"), nullptr, 16);
+    header.img_list_end = std::stoul(meta_data.at("img_list_end"), nullptr, 16);
+    header.align_size = std::stoul(meta_data.at("align_size"), nullptr, 16);
+    header.dsize_extend = std::stoul(meta_data.at("dsize_extend"), nullptr, 16);
+    header.maddr_extend = std::stoul(meta_data.at("maddr_extend"), nullptr, 16);
+    std::memset(header.reserved, 0xFF, sizeof(header.reserved));  // Как в распаковщике
+}
+
+// Функция для чтения данных из файла meta_info
+std::unordered_map<std::string, std::string> read_meta_info(const std::string &meta_info_path) {
+    std::unordered_map<std::string, std::string> meta_data;
+    std::ifstream meta_info_file(meta_info_path);
+
+    if (!meta_info_file) {
+        std::cerr << "Error opening meta_info file: " << meta_info_path << std::endl;
+        return meta_data;
+    }
+
+    std::string line;
+    while (std::getline(meta_info_file, line)) {
+        auto delimiter_pos = line.find('=');
+        if (delimiter_pos != std::string::npos) {
+            std::string key = line.substr(0, delimiter_pos);
+            std::string value = line.substr(delimiter_pos + 1);
+            meta_data[key] = value;
+        }
+    }
+
+    return meta_data;
+}
+
+// Основная функция для упаковки файлов с поддержкой meta_info
 void pack_files(const std::string &input_dir, const std::string &output_file) {
     std::vector<std::filesystem::path> files;
     std::filesystem::path map_file_path;
     bool map_file_found = false;
+    std::filesystem::path meta_info_path;
+    bool meta_info_found = false;
 
-    // Сначала ищем файл с маппингом (md1_file_map)
+    // Сначала ищем файл с маппингом (md1_file_map) и meta_info
     for (const auto &entry : std::filesystem::directory_iterator(input_dir)) {
         if (entry.is_regular_file()) {
             std::string filename = entry.path().filename().string();
-            if (filename.find("md1_file_map") != std::string::npos) {  // Проверяем, содержит ли имя файла "md1_file_map"
+            if (filename.find("md1_file_map") != std::string::npos) {
                 map_file_path = entry.path();
                 map_file_found = true;
-                break;
+            } else if (filename == "meta_info") {
+                meta_info_path = entry.path();
+                meta_info_found = true;
             }
         }
     }
@@ -158,11 +143,40 @@ void pack_files(const std::string &input_dir, const std::string &output_file) {
     // Чтение маппинга из файла
     std::unordered_map<std::string, std::string> file_mapping = read_file_mapping(map_file_path.string());
 
+    // Чтение данных из meta_info, если он найден
+    std::unordered_map<std::string, std::unordered_map<std::string, std::string>> meta_info_data;
+    if (meta_info_found) {
+        std::ifstream meta_file(meta_info_path);
+        std::string line;
+        std::unordered_map<std::string, std::string> current_meta_data;
+        std::string current_file;
+
+        // Читаем данные по каждому файлу
+        while (std::getline(meta_file, line)) {
+            if (line.find("name=") == 0) {
+                if (!current_file.empty()) {
+                    meta_info_data[current_file] = current_meta_data;
+                }
+                current_file = line.substr(5);  // Убираем "name="
+                current_meta_data.clear();
+            }
+            auto delimiter_pos = line.find('=');
+            if (delimiter_pos != std::string::npos) {
+                std::string key = line.substr(0, delimiter_pos);
+                std::string value = line.substr(delimiter_pos + 1);
+                current_meta_data[key] = value;
+            }
+        }
+        if (!current_file.empty()) {
+            meta_info_data[current_file] = current_meta_data;
+        }
+    }
+
     // Собираем список файлов для упаковки
     for (const auto &entry : std::filesystem::directory_iterator(input_dir)) {
-        //if (entry.is_regular_file() && entry.path() != map_file_path) {  // Пропускаем файл маппинга
+        if (entry.is_regular_file() && entry.path().filename().string() != "meta_info") {
             files.push_back(entry.path());
-        //}
+        }
     }
 
     // Сортируем файлы по именам
@@ -199,7 +213,11 @@ void pack_files(const std::string &input_dir, const std::string &output_file) {
 
         // Инициализируем заголовок
         Header header;
-        initialize_header(header, mapped_name, file_data.size(), base_address);
+        if (meta_info_found && meta_info_data.find(mapped_name) != meta_info_data.end()) {
+            initialize_header_from_file(header, meta_info_data[mapped_name]);
+        } else {
+            initialize_header(header, mapped_name, file_data.size(), base_address);
+        }
 
         // Записываем заголовок и данные в выходной файл
         output.write(reinterpret_cast<const char *>(&header), sizeof(Header));
@@ -218,9 +236,5 @@ void pack_files(const std::string &input_dir, const std::string &output_file) {
         base_address += file_data.size() + sizeof(Header) + padding;
     }
 
-    /*// Добавляем md1_file_map в конец файла
-    std::string file_map = "md1_file_map=" + output_file;
-    output.write(file_map.c_str(), file_map.size());
-    */
     std::cout << "Packing complete: " << output_file << std::endl;
 }

@@ -45,7 +45,7 @@ std::unordered_map<std::string, std::string> read_file_mapping(const std::string
         return mapping;
     }
 
-    input_file.seekg(map_offset);
+    input_file.seekg(map_offset + static_cast<std::streamoff>(504)); //504 bytes - остатки от header md1_file_ma, которые надо пропустить, иначе не всё переводится в нормальные файлы
     std::string buffer(std::istreambuf_iterator<char>(input_file), {});
 
     std::stringstream ss(buffer);
@@ -67,7 +67,7 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
     std::unordered_map<std::basic_string<char>, std::basic_string<char>> file_mapping;
     std::streampos map_offset = find_file_map_offset(input_path);
     if (map_offset != -1) {
-       file_mapping = read_file_mapping(input_path, map_offset);
+        file_mapping = read_file_mapping(input_path, map_offset);
     }
     std::filesystem::path input_file_path(input_path);
     std::error_code ec;
@@ -88,6 +88,13 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
 
     int file_counter = 1;  // Добавляем переменную для отслеживания порядка файлов
 
+    // Открываем файл для записи meta_info
+    std::ofstream meta_info_file(output_dir + "/meta_info");
+    if (!meta_info_file) {
+        std::cerr << "Error opening meta_info file for writing" << std::endl;
+        return;
+    }
+
     while (offset < file_size) {
         input_file.seekg(offset, std::ios::beg);
         Header header;
@@ -100,11 +107,25 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
         std::string name(header.name, strnlen(header.name, sizeof(header.name)));
         std::cout << "Found " << name << "@0x" << std::hex << header.base << ",0x" << header.data_size << std::dec << std::endl;
 
-        // Добавляем порядковый номер к имени файла
+        // Запись заголовка в meta_info
+        meta_info_file << "name=" << name << "\n";
+        meta_info_file << "magic1=0x" << std::hex << header.magic1 << std::dec << "\n";
+        meta_info_file << "data_size=" << header.data_size << "\n";
+        meta_info_file << "base=0x" << std::hex << header.base << std::dec << "\n";
+        meta_info_file << "mode=0x" << std::hex << header.mode << std::dec << "\n";
+        meta_info_file << "magic2=0x" << std::hex << header.magic2 << std::dec << "\n";
+        meta_info_file << "data_offset=0x" << std::hex << header.data_offset << std::dec << "\n";
+        meta_info_file << "hdr_version=0x" << std::hex << header.hdr_version << std::dec << "\n";
+        meta_info_file << "img_type=0x" << std::hex << header.img_type << std::dec << "\n";
+        meta_info_file << "img_list_end=0x" << std::hex << header.img_list_end << std::dec << "\n";
+        meta_info_file << "align_size=0x" << std::hex << header.align_size << std::dec << "\n";
+        meta_info_file << "dsize_extend=0x" << std::hex << header.dsize_extend << std::dec << "\n";
+        meta_info_file << "maddr_extend=0x" << std::hex << header.maddr_extend << std::dec << "\n\n";
+
         std::string output_name;
         if (file_mapping.find(name) != file_mapping.end()) {
             output_name = output_dir + "/" + std::to_string(file_counter) + "_" + file_mapping.at(name);
-        }else{
+        } else {
             output_name = output_dir + "/" + std::to_string(file_counter) + "_" + name;
         }
 
@@ -128,4 +149,8 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
         }
         file_counter += 1;
     }
+
+    // Закрываем файл meta_info
+    meta_info_file.close();
+    std::cout << "meta_info file written to " << output_dir << "/meta_info" << std::endl;
 }
