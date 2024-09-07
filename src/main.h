@@ -7,15 +7,12 @@
 #include <sstream>
 #include <cstring>
 #include <cstdint>
-#include <regex>
-
+#include <algorithm>
 
 const uint32_t MD1IMG_MAGIC1 = 0x58881688;
 const uint32_t MD1IMG_MAGIC2 = 0x58891689;
 
 const std::string FILE_MAP_MARKER = "md1_file_map";
-const std::vector<uint8_t> FILE_MAP_SIGNATURE = {0x6D, 0x64, 0x31, 0x5F, 0x66, 0x69, 0x6C, 0x65, 0x5F, 0x6D, 0x61, 0x70};
-
 
 #pragma pack(push, 1)
 struct Header {
@@ -34,6 +31,7 @@ struct Header {
     uint32_t maddr_extend;   // 4 bytes
     uint8_t reserved[432];  // 432 bytes, заполненные значением 0xFF
 };
+#pragma pack(pop)
 
 #include <iostream>
 #include <fstream>

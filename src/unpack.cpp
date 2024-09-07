@@ -97,7 +97,7 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
 
     while (offset < file_size) {
         input_file.seekg(offset, std::ios::beg);
-        Header header;
+        Header header{};
         input_file.read(reinterpret_cast<char *>(&header), sizeof(Header));
 
         if (header.magic1 != MD1IMG_MAGIC1 || header.magic2 != MD1IMG_MAGIC2) {
