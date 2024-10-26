@@ -1,7 +1,7 @@
 #include "main.h"
 
 int main(int argc, char* argv[]) {
-    std::cout << "\nmd1img_repacker v0.3 by blackeangel https://github.com/blackeangel/md1img_repacker\n" << std::endl;
+    std::cout << "\nmd1img_repacker v0.4 by blackeangel https://github.com/blackeangel/md1img_repacker\n" << std::endl;
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <pack|unpack> <input> [output_dir]" << std::endl;
         return 1;
