@@ -121,7 +121,7 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
         meta_info_file << "img_list_end=0x" << std::hex << header.img_list_end << std::dec << "\n";
         meta_info_file << "align_size=0x" << std::hex << header.align_size << std::dec << "\n";
         meta_info_file << "dsize_extend=0x" << std::hex << header.dsize_extend << std::dec << "\n";
-        meta_info_file << "maddr_extend=0x" << std::hex << header.maddr_extend << std::dec << "\n\n";
+        meta_info_file << "maddr_extend=0x" << std::hex << header.maddr_extend << std::dec << "\n";
 
         std::string output_name;
         if (file_mapping.find(name) != file_mapping.end()) {
@@ -214,7 +214,7 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
         meta_info_file << "img_list_end=0x" << std::hex << header.img_list_end << std::dec << "\n";
         meta_info_file << "align_size=0x" << std::hex << header.align_size << std::dec << "\n";
         meta_info_file << "dsize_extend=0x" << std::hex << header.dsize_extend << std::dec << "\n";
-        meta_info_file << "maddr_extend=0x" << std::hex << header.maddr_extend << std::dec << "\n\n";
+        meta_info_file << "maddr_extend=0x" << std::hex << header.maddr_extend << std::dec << "\n";
 
         std::string output_name;
         if (file_mapping.find(name) != file_mapping.end()) {
@@ -232,15 +232,35 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
         // Проверка формата файла для распаковки
         std::string output_name1 = to_lowercase(output_name);
         if (ends_with(output_name1, ".gz") && is_gz_format(data)) {
+            // Сохраняем уровень сжатия по XFL-байту заголовка gzip.
+            // Приближение: XFL кодирует только 3 варианта (1, 6, 9).
+            int gz_level = detect_gz_level(data);
+            meta_info_file << "gz_level=" << gz_level << "\n\n";
             output_name = output_name.substr(0, output_name.size() - 3);  // Убираем ".gz" из имени
             auto decompressed_data = decompress_gz(data);
             std::ofstream(output_name, std::ios::binary).write(decompressed_data.data(), decompressed_data.size());
-            std::cout << "Decompressed " << name << " to " << output_name << std::endl;
+            std::cout << "Decompressed gz(level=" << gz_level << ") " << name << " to " << output_name << std::endl;
         } else if (ends_with(output_name1, ".xz") && is_xz_format(data)) {
+            std::string xz_subformat = is_lzma_raw_format(data) ? "lzma" : "xz";
+            meta_info_file << "xz_subformat=" << xz_subformat << "\n";
+            if (xz_subformat == "lzma") {
+                // Сохраняем точные параметры LZMA raw: lc, lp, pb, dict_size.
+                // При упаковке они будут переданы напрямую в lzma_alone_encoder.
+                uint8_t lc, lp, pb; uint32_t dict_size;
+                detect_lzma_params(data, lc, lp, pb, dict_size);
+                meta_info_file << "lzma_lc="   << static_cast<int>(lc) << "\n";
+                meta_info_file << "lzma_lp="   << static_cast<int>(lp) << "\n";
+                meta_info_file << "lzma_pb="   << static_cast<int>(pb) << "\n";
+                meta_info_file << "lzma_dict=" << dict_size             << "\n\n";
+            } else {
+                // Определяем уровень XZ-контейнера по размеру словаря LZMA2 из заголовка блока.
+                int xz_level = detect_xz_level(data);
+                meta_info_file << "xz_level=" << xz_level << "\n\n";
+            }
             output_name = output_name.substr(0, output_name.size() - 3);  // Убираем ".xz" из имени
             auto decompressed_data = decompress_xz(data);
             std::ofstream(output_name, std::ios::binary).write(decompressed_data.data(), decompressed_data.size());
-            std::cout << "Decompressed " << name << " to " << output_name << std::endl;
+            std::cout << "Decompressed (" << xz_subformat << ") " << name << " to " << output_name << std::endl;
         } else {
             // Если распаковка не требуется, сохраняем файл как есть
             std::ofstream output_file(output_name, std::ios::binary);
@@ -249,6 +269,7 @@ void process_file(const std::string &input_path, const std::string &output_dir) 
                 return;
             }
             output_file.write(data.data(), header.data_size);
+            meta_info_file << "\n";
             std::cout << name << " written to " << output_name << std::endl;
         }
 

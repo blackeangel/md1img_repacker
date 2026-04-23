@@ -354,12 +354,59 @@ void pack_files(const std::string &input_dir, const std::string &output_file) {
             mapped_name = stripped_name; // Если соответствие не найдено, используем исходное имя
         }
 
+
+        // Лямбда для чтения целочисленного поля из meta_info с заданным default.
+        auto get_meta_int = [&](const std::string& field, int def) -> int {
+            if (!meta_info_found) return def;
+            auto it = meta_info_data.find(mapped_name);
+            if (it == meta_info_data.end()) return def;
+            auto fit = it->second.find(field);
+            if (fit == it->second.end()) return def;
+            try { return std::stoi(fit->second); } catch (...) { return def; }
+        };
+        auto get_meta_uint32 = [&](const std::string& field, uint32_t def) -> uint32_t {
+            if (!meta_info_found) return def;
+            auto it = meta_info_data.find(mapped_name);
+            if (it == meta_info_data.end()) return def;
+            auto fit = it->second.find(field);
+            if (fit == it->second.end()) return def;
+            try { return static_cast<uint32_t>(std::stoul(fit->second)); } catch (...) { return def; }
+        };
+
         // Проверяем, нужно ли сжать файл
         if (!compression_type.empty()) {
             if (compression_type.ends_with(".gz")) {
-                file_data = compress_gz(file_data);
+                // Восстанавливаем уровень сжатия из meta_info (сохранён при распаковке).
+                // Если поля нет (старый образ) — используем Z_BEST_COMPRESSION (9).
+                int gz_level = get_meta_int("gz_level", Z_BEST_COMPRESSION);
+                file_data = compress_gz(file_data, gz_level);
+                std::cout << "  (compressed as GZ level=" << gz_level << ")" << std::endl;
             } else if (compression_type.ends_with(".xz")) {
-                file_data = compress_xz(file_data);
+                std::string xz_subformat = "xz";
+                if (meta_info_found) {
+                    auto it = meta_info_data.find(mapped_name);
+                    if (it != meta_info_data.end()) {
+                        auto fit = it->second.find("xz_subformat");
+                        if (fit != it->second.end()) xz_subformat = fit->second;
+                    }
+                }
+                if (xz_subformat == "lzma") {
+                    // Восстанавливаем точные параметры LZMA raw stream из meta_info.
+                    // Defaults — параметры уровня 6 (pb=2,lp=0,lc=3, dict=8M),
+                    // что соответствует распространённому props-байту 0x5D в MTK.
+                    uint8_t  lc        = static_cast<uint8_t>(get_meta_int("lzma_lc", 3));
+                    uint8_t  lp        = static_cast<uint8_t>(get_meta_int("lzma_lp", 0));
+                    uint8_t  pb        = static_cast<uint8_t>(get_meta_int("lzma_pb", 2));
+                    uint32_t dict_size = get_meta_uint32("lzma_dict", 8u * 1024u * 1024u);
+                    file_data = compress_lzma_raw(file_data, lc, lp, pb, dict_size);
+                    std::cout << "  (compressed as LZMA raw: lc=" << (int)lc
+                              << " lp=" << (int)lp << " pb=" << (int)pb
+                              << " dict=" << dict_size << ")" << std::endl;
+                } else {
+                    int xz_level = get_meta_int("xz_level", 6);
+                    file_data = compress_xz(file_data, xz_level);
+                    std::cout << "  (compressed as XZ container level=" << xz_level << ")" << std::endl;
+                }
             }
         }
 
